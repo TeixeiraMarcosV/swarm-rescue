@@ -52,7 +52,16 @@ class OccupancyGrid(Grid):
         self.grid = np.zeros((self.x_max_grid, self.y_max_grid))
         self.zoomed_grid = np.empty((self.x_max_grid, self.y_max_grid))
 
-    def update_grid(self, pose: Pose):
+    def update_grid2(self, received_messages):
+        for msg in received_messages:
+            message = msg[1] # the part defined in define_define_message_for_all
+            other_drone_grid = message[2] # the grid of the drane that send the message
+            for i in range(self.x_max_grid):
+                for j in range(self.y_max_grid):
+                    self.grid[i, j] += other_drone_grid.grid[i,j]
+
+    
+    def update_grid(self, pose: Pose, messages):
         """
         Bayesian map update with new observation
         lidar : lidar data
@@ -134,7 +143,12 @@ class MyDroneMapping(DroneAbstract):
         """
         Here, we don't need communication...
         """
-        pass
+        msg_data = (self.identifier,
+                    (self.measured_gps_position(),
+                     self.measured_compass_angle()),
+                    self.grid
+                    )
+        return msg_data
 
     def control(self):
         """
@@ -152,8 +166,14 @@ class MyDroneMapping(DroneAbstract):
                                    self.measured_compass_angle())
         # self.estimated_pose = Pose(np.asarray(self.true_position()),
         #                            self.true_angle())
-
-        self.grid.update_grid(pose=self.estimated_pose)
+        
+        if self.communicator:
+            received_messages = self.communicator.received_messages
+            self.grid.update_grid2(received_messages)
+        
+        
+        
+        self.grid.update_grid(pose=self.estimated_pose, messages=self.communicator.received_messages )
         if self.iteration % 5 == 0:
             self.grid.display(self.grid.grid,
                               self.estimated_pose,
@@ -177,8 +197,9 @@ class MyMapMapping(MapAbstract):
         self._rescue_center = RescueCenter(size=(210, 90))
         self._rescue_center_pos = ((440, 315), 0)
 
-        self._number_drones = 1
-        self._drones_pos = [((-50, 0), 0)]
+        self._number_drones = 2
+        self._drones_pos = [((-50, 0), 0),
+                            ((-50, 20), 0)]
         self._drones = []
 
     def construct_playground(self, drone_type: Type[DroneAbstract]) \
